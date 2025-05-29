@@ -6,7 +6,7 @@ Summary:        Open-source OpenGL, Vulkan, and OpenCL drivers
 
 License:        MIT and BSD and SGI-B-2.0
 URL:            https://www.mesa3d.org/
-Source0:        https://mesa.freedesktop.org/archive/mesa-%{version}.tar.xz
+Source0:        https://archive.mesa3d.org//mesa-%{version}.tar.xz
 Patch0:         https://gitlab.freedesktop.org/mesa/mesa/-/commit/e6481d3f42e0cd735fda38fb3029e6f8abf5a0e6.patch
 
 BuildRequires:  gcc, clang, meson, ninja-build
