@@ -10,9 +10,9 @@ Source0:        https://archive.mesa3d.org//mesa-%{version}.tar.xz
 Patch0:         https://gitlab.freedesktop.org/mesa/mesa/-/commit/e6481d3f42e0cd735fda38fb3029e6f8abf5a0e6.patch
 
 BuildRequires:  gcc, clang, meson, ninja-build
-BuildRequires:  libdrm-devel, libelf-devel, libglvnd-devel, libva-devel, libvdpau-devel
-BuildRequires:  libx11-devel, libxcb-devel, libxext-devel, libxshmfence-devel, libxxf86vm-devel
-BuildRequires:  libxrandr-devel, libxml2-devel, expat-devel, zlib-devel, zstd-devel
+BuildRequires:  libdrm-devel, elfutils-libelf-devel, libglvnd-devel, libva-devel, libvdpau-devel
+BuildRequires:  libX11-devel, libxcb-devel, libXext-devel, libxshmfence-devel, libXxf86vm-devel
+BuildRequires:  libXrandr-devel, libxml2-devel, expat-devel, zlib-devel, zstd-devel
 BuildRequires:  spirv-tools-devel, spirv-llvm-translator-devel, systemd-devel, wayland-devel
 BuildRequires:  wayland-protocols-devel, llvm-devel, lm_sensors-devel
 BuildRequires:  python3-mako, python3-packaging, python3-ply, python3-yaml
