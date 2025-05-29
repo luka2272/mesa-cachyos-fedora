@@ -14,7 +14,7 @@ BuildRequires:  libdrm-devel, elfutils-libelf-devel, libglvnd-devel, libva-devel
 BuildRequires:  libX11-devel, libxcb-devel, libXext-devel, libxshmfence-devel, libXxf86vm-devel
 BuildRequires:  libXrandr-devel, libxml2-devel, expat-devel, zlib-devel, libzstd-devel
 BuildRequires:  spirv-tools-devel, spirv-llvm-translator-devel, systemd-devel, wayland-devel
-BuildRequires:  wayland-protocols-devel, llvm-devel, lm_sensors-devel, directx-headers-devel
+BuildRequires:  wayland-protocols-devel, llvm-devel, lm_sensors-devel, directX-Headers-devel
 BuildRequires:  python3-mako, python3-packaging, python3-ply, python3-yaml
 BuildRequires:  rust, rust-packaging, cbindgen, glslang-devel, cmake, libclc-devel
 BuildRequires:  valgrind-devel, python3-sphinx, python3-sphinx_rtd_theme
