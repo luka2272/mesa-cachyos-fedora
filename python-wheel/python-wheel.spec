@@ -139,6 +139,7 @@ install -p %{_pyproject_wheeldir}/%{python_wheel_name} -t %{buildroot}%{python_w
 
 
 %check
+%pytest -v --ignore tests/test_bdist_wheel.py
 %{_rpmconfigdir}/pythonbundles.py src/wheel/vendored/vendor.txt --namespace 'python%{python3_pkgversion}dist' --compare-with '%{bundled}'
 
 # Smoke test
