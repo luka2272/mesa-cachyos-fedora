@@ -1,0 +1,13 @@
+discover:
+    how: shell
+    tests:
+    - name: import test
+      test: python3 -c 'import wheel'
+      require:
+      - python3-wheel
+    - name: cli help test
+      test: wheel --help
+      require:
+      - python3-wheel
+execute:
+  how: tmt
