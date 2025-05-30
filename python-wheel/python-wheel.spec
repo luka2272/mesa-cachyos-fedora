@@ -32,7 +32,7 @@ Summary:        Built-package format for Python
 # packaging is Apache-2.0 OR BSD-2-Clause
 License:        MIT AND (Apache-2.0 OR BSD-2-Clause)
 URL:            https://github.com/pypa/wheel
-Source0:        %{url}/archive/%{version}/%{pypi_name}-%{version}.tar.gz
+Source0: %{url}/archive/refs/tags/%{version}.tar.gz#/%{pypi_name}-%{version}.tar.gz
 # This is used in bootstrap mode where we manually install the wheel and
 # entrypoints
 Source1:        wheel-entrypoint
