@@ -13,7 +13,7 @@
 # A real build uses %%pyproject_wheel and %%pyproject_install.
 %bcond bootstrap 0
 # Default: when bootstrapping -> disable tests
-%bcond tests %{without bootstrap}
+%bcond tests 0
 
 # Similar to what we have in pythonX.Y.spec files.
 # If enabled, provides unversioned executables and other stuff.
