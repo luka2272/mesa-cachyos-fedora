@@ -2,7 +2,7 @@
 #region version
 %global maj_ver 20
 %global min_ver 1
-%global patch_ver 0
+%global patch_ver 5
 #global rc_ver 4
 
 %bcond_with snapshot_build
