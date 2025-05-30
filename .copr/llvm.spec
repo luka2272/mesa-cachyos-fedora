@@ -53,8 +53,6 @@ License:  NCSA
 URL:      https://llvm.org
 Source0:  %{build_repo}/archive/%{commit}.tar.gz#/llvm-project-%{commit}.tar.gz
 %if %{without compat_build}
-Source3:  run-lit-tests
-Source4:  lit.fedora.cfg.py
 %endif
 
 BuildRequires:  gcc
