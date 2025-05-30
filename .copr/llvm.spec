@@ -1,7 +1,7 @@
 %global maj_ver 20
 %global min_ver 1
-%global patch_ver 0
-%global baserelease 0.1
+%global patch_ver 5
+#%global baserelease 0.1
 
 %ifarch ppc64le
 # Limit build jobs on ppc64 systems to avoid running out of memory.
