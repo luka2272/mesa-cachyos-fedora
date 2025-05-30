@@ -248,7 +248,6 @@ Source0: https://github.com/llvm/llvm-project/archive/%{llvm_snapshot_git_revisi
 Source0: https://github.com/llvm/llvm-project/releases/download/llvmorg-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:-rc%{rc_ver}}/%{src_tarball_dir}.tar.xz
 Source1: https://github.com/llvm/llvm-project/releases/download/llvmorg-%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:-rc%{rc_ver}}/%{src_tarball_dir}.tar.xz.sig
 %endif
-Source6: release-keys.asc
 
 %if %{without compat_build}
 Source2005: macros.%{pkg_name_clang}
