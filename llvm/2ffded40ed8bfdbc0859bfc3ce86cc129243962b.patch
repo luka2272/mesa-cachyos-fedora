@@ -1,0 +1,632 @@
+From 2ffded40ed8bfdbc0859bfc3ce86cc129243962b Mon Sep 17 00:00:00 2001
+From: Konrad Kleine <kkleine@redhat.com>
+Date: Dec 05 2024 11:44:07 +0000
+Subject: Add MLIR
+
+
+---
+
+diff --git a/0001-CMake-Add-missing-dependency-108461.patch b/0001-CMake-Add-missing-dependency-108461.patch
+new file mode 100644
+index 0000000..e6862fd
+--- /dev/null
++++ b/0001-CMake-Add-missing-dependency-108461.patch
+@@ -0,0 +1,129 @@
++From 17ff6161b83e6a5e86fcb6a13c5551bba1438405 Mon Sep 17 00:00:00 2001
++From: Erick Ochoa <github@ceci-nest-pas.me>
++Date: Thu, 12 Sep 2024 21:16:58 -0400
++Subject: [PATCH 1/9] [CMake] Add missing dependency (#108461)
++
++The [`mlir-capi-execution-engine-test` test
++executable](https://github.com/llvm/llvm-project/blob/main/mlir/test/CAPI/CMakeLists.txt#L26-L34)
++
++```cmake
++if(MLIR_ENABLE_EXECUTION_ENGINE)
++  _add_capi_test_executable(mlir-capi-execution-engine-test
++    execution_engine.c
++  LINK_LIBS PRIVATE
++    MLIRCAPIConversion
++    MLIRCAPIExecutionEngine
++    MLIRCAPIRegisterEverything
++)
++endif()
++```
++
++
++is run by lit tests, but it is not properly listed as a dependency. It
++is added in places conditionally across the file
++[`tests/CMakeLists.txt`](https://github.com/llvm/llvm-project/blob/main/mlir/test/CMakeLists.txt#L130-L143)
++
++```cmake
++# The native target may not be enabled, in this case we won't
++# run tests that involves executing on the host: do not build
++# useless binaries.
++if(LLVM_ENABLE_PIC AND TARGET ${LLVM_NATIVE_ARCH})
++  list(APPEND MLIR_TEST_DEPENDS
++    mlir-cpu-runner
++    llc
++    mlir_async_runtime
++    mlir-capi-execution-engine-test
++    mlir_c_runner_utils
++    mlir_runner_utils
++    mlir_float16_utils
++  )
++endif()
++```
++
++But this condition is not the same as the one where the test executable
++is added. [It has been reported on discord that the following error
++occurred:](https://discord.com/channels/636084430946959380/642426447167881246/1283811636725022730)
++
++```
++FAIL: MLIR :: CAPI/execution_engine.c (2 of 2121)
++******************** TEST 'MLIR :: CAPI/execution_engine.c' FAILED ********************
++Exit Code: 127
++Command Output (stdout):
++--
++# RUN: at line 10
++/usr/bin/mlir-capi-execution-engine-test 2>&1 | /usr/bin/FileCheck /builddir/build/BUILD/mlir-19.1.0_rc4-build/mlir-19.1.0-rc4.src/test/CAPI/execution_engine.c
++# executed command: /usr/bin/mlir-capi-execution-engine-test
++# .---command stderr------------
++# | '/usr/bin/mlir-capi-execution-engine-test': command not found
++# `-----------------------------
++```
++
++This error will not be deterministic and is dependent on the order in
++which tools are built. If by any chance,
++`mlir-capi-execution-engine-test` is built before the lit tests run,
++then nothing will happen. But lit tests can be run before
++`mlir-capi-execution-engine-test` is built.
++
++This patch adds the `mlir-capi-execution-engine` to the
++`MLIR_TEST_DEPENDS` list when the `MLIR_ENABLE_EXECUTION_ENGINE` flag is
++present.
++
++Happy to make changes like:
++* removing `mlir-capi-execution-engine-test` from the other place where
++it is included in the tests
++* and merge and sort alphabetically these two commands
++
++```cmake
++set(MLIR_TEST_DEPENDS
++FileCheck count not split-file
++mlir-capi-ir-test
++mlir-capi-irdl-test
++mlir-capi-llvm-test
++mlir-capi-pass-test
++mlir-capi-quant-test
++mlir-capi-rewrite-test
++mlir-capi-sparse-tensor-test
++mlir-capi-transform-test
++mlir-capi-transform-interpreter-test
++mlir-capi-translation-test
++mlir-linalg-ods-yaml-gen
++mlir-lsp-server
++mlir-opt
++  mlir-query
++  mlir-reduce
++  mlir-tblgen
++  mlir-translate
++  tblgen-lsp-server
++  tblgen-to-irdl
++  )
++
++set(MLIR_TEST_DEPENDS ${MLIR_TEST_DEPENDS}
++  mlir-capi-pdl-test
++  mlir-pdll-lsp-server
++  mlir-pdll
++  )
++```
++
++Co-authored-by: Erick Ochoa <erick@ceci-nest-pas.me>
++---
++ mlir/test/CMakeLists.txt | 4 ++++
++ 1 file changed, 4 insertions(+)
++
++diff --git a/mlir/test/CMakeLists.txt b/mlir/test/CMakeLists.txt
++index df95e5db11f1..4d2d738b734e 100644
++--- a/mlir/test/CMakeLists.txt
+++++ b/mlir/test/CMakeLists.txt
++@@ -150,6 +150,10 @@ if(MLIR_ENABLE_CUDA_RUNNER)
++   list(APPEND MLIR_TEST_DEPENDS mlir_cuda_runtime)
++ endif()
++ 
+++if(MLIR_ENABLE_EXECUTION_ENGINE)
+++  list(APPEND MLIR_TEST_DEPENDS mlir-capi-execution-engine-test)
+++endif()
+++
++ if(MLIR_ENABLE_ROCM_RUNNER)
++   list(APPEND MLIR_TEST_DEPENDS mlir_rocm_runtime)
++ endif()
++-- 
++2.46.0
++
+diff --git a/0001-mlir-Specify-deps-via-LLVM_LINK_COMPONENTS.patch b/0001-mlir-Specify-deps-via-LLVM_LINK_COMPONENTS.patch
+new file mode 100644
+index 0000000..2178800
+--- /dev/null
++++ b/0001-mlir-Specify-deps-via-LLVM_LINK_COMPONENTS.patch
+@@ -0,0 +1,80 @@
++From c8f93f1958de1f59222a89dd64a573f91105e135 Mon Sep 17 00:00:00 2001
++From: Konrad Kleine <kkleine@redhat.com>
++Date: Tue, 3 Dec 2024 20:53:29 +0100
++Subject: [PATCH] [mlir] Specify deps via `LLVM_LINK_COMPONENTS`
++
++This specifies the dependencies to link against with
++`LLVM_LINK_COMPONENTS` for the
++`mlir/test/Target/LLVM/MLIRTargetLLVMTests` binary.
++
++Before, the dependencies where directly added to the
++`target_link_libraries()` call which caused the problems I describe
++next:
++
++When doing a build of LLVM with MLIR I want to link against
++`libLLVM.so` instead of statically linking `libLLVMSupport.a`.
++MLIR on the other side seems to statically link against
++`libLLVMSupport.a` because when I link to the shared library `libLLVM.so` I get:
++
++```
++CommandLine Error: Option 'aarch64-ptrauth-auth-checks' registered more than once!
++```
++
++This error indicates that the `Support` library is linked twice in the `MLIRTargetLLVMTest` binary.
++
++Here's the creation of the `MLIRTargetLLVMTest` binary before (Notice the
++`libLLVMSupport.a`):
++
++```
++[6535/6847] : && /usr/bin/clang++ -O2 -flto=thin -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=3 -Wp,-D_GLIBCXX_ASSERTIONS --config=/usr/lib/rpm/redhat/redhat-hardened-clang.cfg -fstack-protector-strong -mbranch-protection=standard -fasynchronous-unwind-tables -D_DEFAULT_SOURCE -Dasm=__asm__ -fPIC -fno-semantic-interposition -fvisibility-inlines-hidden -Werror=date-time -Werror=unguarded-availability-new -Wall -Wextra -Wno-unused-parameter -Wwrite-strings -Wcast-qual -Wmissing-field-initializers -pedantic -Wno-long-long -Wc++98-compat-extra-semi -Wimplicit-fallthrough -Wcovered-switch-default -Wno-noexcept-type -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -Wsuggest-override -Wstring-conversion -Wmisleading-indentation -Wctad-maybe-unsupported -fdiagnostics-color -ffunction-sections -fdata-sections -Wundef -Werror=mismatched-tags -O2 -g -DNDEBUG -Wl,-z,relro -Wl,--as-needed  -Wl,-z,pack-relative-relocs -Wl,-z,now --config=/usr/lib/rpm/redhat/redhat-hardened-clang-ld.cfg  -flto=thin -ffat-lto-objects -Wl,--build-id=sha1    -Wl,--gc-sections  -fno-lto tools/mlir/unittests/Target/LLVM/CMakeFiles/MLIRTargetLLVMTests.dir/SerializeNVVMTarget.cpp.o tools/mlir/unittests/Target/LLVM/CMakeFiles/MLIRTargetLLVMTests.dir/SerializeROCDLTarget.cpp.o tools/mlir/unittests/Target/LLVM/CMakeFiles/MLIRTargetLLVMTests.dir/SerializeToLLVMBitcode.cpp.o -o tools/mlir/unittests/Target/LLVM/MLIRTargetLLVMTests  -Wl,-rpath,/builddir/build/BUILD/llvm-19.1.3-build/llvm-project-19.1.3.src/llvm/redhat-linux-build/lib64  lib64/libllvm_gtest_main.a  lib64/libllvm_gtest.a  lib64/libMLIRTargetLLVM.a  lib64/libMLIRNVVMTarget.a  lib64/libMLIRROCDLTarget.a  lib64/libMLIRGPUDialect.a  lib64/libMLIRNVVMDialect.a  lib64/libMLIRLLVMDialect.a  lib64/libMLIRLLVMToLLVMIRTranslation.a  lib64/libMLIRBuiltinToLLVMIRTranslation.a  lib64/libMLIRNVVMToLLVMIRTranslation.a  lib64/libMLIRROCDLToLLVMIRTranslation.a  lib64/libMLIRGPUToLLVMIRTranslation.a  lib64/libLLVMAArch64CodeGen.a  lib64/libLLVMAArch64Desc.a  lib64/libLLVMAArch64Info.a  -lpthread  lib64/libMLIRTargetLLVM.a  lib64/libMLIRROCDLDialect.a  lib64/libMLIRExecutionEngineUtils.a  lib64/libMLIRGPUDialect.a  lib64/libMLIRMemRefDialect.a  lib64/libMLIRArithUtils.a  lib64/libMLIRDialectUtils.a  lib64/libMLIRComplexDialect.a  lib64/libMLIRArithAttrToLLVMConversion.a  lib64/libMLIRArithDialect.a  lib64/libMLIRCastInterfaces.a  lib64/libMLIRDialect.a  lib64/libMLIRInferIntRangeCommon.a  lib64/libMLIRUBDialect.a  lib64/libMLIRShapedOpInterfaces.a  lib64/libMLIRTargetLLVMIRExport.a  lib64/libMLIRDLTIDialect.a  lib64/libMLIRLLVMIRTransforms.a  lib64/libMLIRNVVMDialect.a  lib64/libMLIRLLVMDialect.a  lib64/libMLIRFuncDialect.a  lib64/libMLIRTransforms.a  lib64/libMLIRMemorySlotInterfaces.a  lib64/libMLIRCopyOpInterface.a  lib64/libMLIRRuntimeVerifiableOpInterface.a  lib64/libMLIRTranslateLib.a  lib64/libMLIRParser.a  lib64/libMLIRBytecodeReader.a  lib64/libMLIRAsmParser.a  lib64/libMLIRTransformUtils.a  lib64/libMLIRSubsetOpInterface.a  lib64/libMLIRValueBoundsOpInterface.a  lib64/libMLIRDestinationStyleOpInterface.a  lib64/libMLIRRewrite.a  lib64/libMLIRRewritePDL.a  lib64/libMLIRPDLToPDLInterp.a  lib64/libMLIRPass.a  lib64/libMLIRAnalysis.a  lib64/libMLIRControlFlowInterfaces.a  lib64/libMLIRInferIntRangeInterface.a  lib64/libMLIRCallInterfaces.a  lib64/libMLIRDataLayoutInterfaces.a  lib64/libMLIRViewLikeInterface.a  lib64/libMLIRLoopLikeInterface.a  lib64/libMLIRPresburger.a  lib64/libMLIRPDLInterpDialect.a  lib64/libMLIRFunctionInterfaces.a  lib64/libMLIRPDLDialect.a  lib64/libMLIRSideEffectInterfaces.a  lib64/libMLIRInferTypeOpInterface.a  lib64/libMLIRIR.a  lib64/libMLIRSupport.a  lib64/libLLVM.so.19.1  lib64/libLLVMAArch64Utils.a  lib64/libLLVMAsmPrinter.a  lib64/libLLVMCFGuard.a  lib64/libLLVMGlobalISel.a  lib64/libLLVMSelectionDAG.a  lib64/libLLVMCodeGen.a  lib64/libLLVMScalarOpts.a  lib64/libLLVMAggressiveInstCombine.a  lib64/libLLVMInstCombine.a  lib64/libLLVMBitWriter.a  lib64/libLLVMObjCARCOpts.a  lib64/libLLVMCodeGenTypes.a  lib64/libLLVMTarget.a  lib64/libLLVMVectorize.a  lib64/libLLVMTransformUtils.a  lib64/libLLVMAnalysis.a  lib64/libLLVMProfileData.a  lib64/libLLVMSymbolize.a  lib64/libLLVMDebugInfoDWARF.a  lib64/libLLVMDebugInfoPDB.a  lib64/libLLVMObject.a  lib64/libLLVMMCParser.a  lib64/libLLVMMC.a  lib64/libLLVMIRReader.a  lib64/libLLVMBitReader.a  lib64/libLLVMAsmParser.a  lib64/libLLVMTextAPI.a  lib64/libLLVMDebugInfoCodeView.a  lib64/libLLVMDebugInfoMSF.a  lib64/libLLVMDebugInfoBTF.a  lib64/libLLVMCore.a  lib64/libLLVMBinaryFormat.a  lib64/libLLVMRemarks.a  lib64/libLLVMBitstreamReader.a  lib64/libLLVMTargetParser.a  lib64/libLLVMSupport.a  lib64/libLLVMDemangle.a  -lrt  -ldl  -lm  /usr/lib64/libz.so  /usr/lib64/libzstd.so && :
++```
++
++Here's the full error:
++
++```
++[24/25] cd /builddir/build/BUILD/llvm-19.1.3-build/llvm-project-19.1.3.src/llvm/redhat-linux-build/tools/mlir/test && /usr/bin/python3 /builddir/build/BUILD/llvm-19.1.3-build/llvm-project-19.1.3.src/llvm/redhat-linux-build/./bin/llvm-lit -vv /builddir/build/BUILD/llvm-19.1.3-build/llvm-project-19.1.3.src/llvm/redhat-linux-build/tools/mlir/test
++: CommandLine Error: Option 'aarch64-ptrauth-auth-checks' registered more than once!
++LLVM ERROR: inconsistency in registered CommandLine options
++llvm-lit: /builddir/build/BUILD/llvm-19.1.3-build/llvm-project-19.1.3.src/llvm/utils/lit/lit/formats/googletest.py:38: warning: unable to discover google-tests in '/builddir/build/BUILD/llvm-19.1.3-build/llvm-project-19.1.3.src/llvm/redhat-linux-build/tools/mlir/unittests/Target/LLVM/./MLIRTargetLLVMTests': Command '['/builddir/build/BUILD/llvm-19.1.3-build/llvm-project-19.1.3.src/llvm/redhat-linux-build/tools/mlir/unittests/Target/LLVM/./MLIRTargetLLVMTests', '--gtest_list_tests', '--gtest_filter=-*DISABLED_*']' died with <Signals.SIGABRT: 6>.. Process output: b''
++error: filter did not match any tests (of 2704 discovered).  Use '--allow-empty-runs' to suppress this error.
++FAILED: tools/mlir/test/CMakeFiles/check-mlir /builddir/build/BUILD/llvm-19.1.3-build/llvm-project-19.1.3.src/llvm/redhat-linux-build/tools/mlir/test/CMakeFiles/check-mlir
++```
++
++Here's the CMake invocation:
++
++```
++/usr/bin/cmake -S . -B redhat-linux-build -DCMAKE_C_FLAGS_RELEASE:STRING=-DNDEBUG -DCMAKE_CXX_FLAGS_RELEASE:STRING=-DNDEBUG -DCMAKE_Fortran_FLAGS_RELEASE:STRING=-DNDEBUG -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_INSTALL_DO_STRIP:BOOL=OFF -DCMAKE_INSTALL_PREFIX:PATH=/usr -DINCLUDE_INSTALL_DIR:PATH=/usr/include -DLIB_INSTALL_DIR:PATH=/usr/lib64 -DSYSCONF_INSTALL_DIR:PATH=/etc -DSHARE_INSTALL_PREFIX:PATH=/usr/share -DLIB_SUFFIX=64 -DBUILD_SHARED_LIBS:BOOL=ON -G Ninja '' -DCLANG_BUILD_EXAMPLES:BOOL=OFF -DCLANG_CONFIG_FILE_SYSTEM_DIR=/etc/clang/ -DCLANG_DEFAULT_PIE_ON_LINUX=OFF -DCLANG_DEFAULT_UNWINDLIB=libgcc -DCLANG_ENABLE_ARCMT:BOOL=ON -DCLANG_ENABLE_STATIC_ANALYZER:BOOL=ON -DCLANG_INCLUDE_DOCS:BOOL=ON -DCLANG_INCLUDE_TESTS:BOOL=ON -DCLANG_LINK_CLANG_DYLIB=ON -DCLANG_PLUGIN_SUPPORT:BOOL=ON '-DCLANG_REPOSITORY_STRING=Fedora 19.1.3-5.fc42' -DLLVM_EXTERNAL_CLANG_TOOLS_EXTRA_SOURCE_DIR=../clang-tools-extra -DCLANG_RESOURCE_DIR=../lib/clang/19 -DCOMPILER_RT_INCLUDE_TESTS:BOOL=OFF -DCOMPILER_RT_INSTALL_PATH=/usr/lib/clang/19 -DLLVM_ENABLE_DOXYGEN:BOOL=OFF -DLLVM_ENABLE_SPHINX:BOOL=ON -DLLVM_BUILD_DOCS:BOOL=ON -DSPHINX_EXECUTABLE=/usr/bin/sphinx-build-3 -DSPHINX_OUTPUT_HTML:BOOL=OFF -DSPHINX_OUTPUT_MAN:BOOL=ON -DSPHINX_WARNINGS_AS_ERRORS=OFF -DLLDB_DISABLE_CURSES:BOOL=OFF -DLLDB_DISABLE_LIBEDIT:BOOL=OFF -DLLDB_DISABLE_PYTHON:BOOL=OFF -DLLDB_ENFORCE_STRICT_TEST_REQUIREMENTS:BOOL=ON -DLLVM_APPEND_VC_REV:BOOL=OFF -DLLVM_BUILD_EXAMPLES:BOOL=OFF -DLLVM_BUILD_EXTERNAL_COMPILER_RT:BOOL=ON -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_BUILD_RUNTIME:BOOL=ON -DLLVM_BUILD_TOOLS:BOOL=ON -DLLVM_BUILD_UTILS:BOOL=ON -DLLVM_COMMON_CMAKE_UTILS=/usr/share/llvm/cmake -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-redhat-linux-gnu -DLLVM_DYLIB_COMPONENTS=all -DLLVM_ENABLE_EH=ON -DLLVM_ENABLE_FFI:BOOL=ON -DLLVM_ENABLE_LIBCXX:BOOL=OFF -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON '-DLLVM_ENABLE_PROJECTS=clang;clang-tools-extra;lld;lldb;mlir' -DLLVM_ENABLE_RTTI:BOOL=ON '-DLLVM_ENABLE_RUNTIMES=compiler-rt;openmp;offload' -DLLVM_ENABLE_ZLIB:BOOL=ON -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=AVR -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES:BOOL=ON -DLLVM_INCLUDE_TOOLS:BOOL=ON -DLLVM_INCLUDE_UTILS:BOOL=ON -DLLVM_INSTALL_TOOLCHAIN_ONLY:BOOL=OFF -DLLVM_INSTALL_UTILS:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON -DLLVM_PARALLEL_LINK_JOBS=1 -DLLVM_TARGETS_TO_BUILD=all -DLLVM_TOOLS_INSTALL_DIR:PATH=bin -DLLVM_UNREACHABLE_OPTIMIZE:BOOL=OFF -DLLVM_USE_PERF:BOOL=ON -DLLVM_UTILS_INSTALL_DIR:PATH=bin -DMLIR_INCLUDE_DOCS:BOOL=ON -DMLIR_INCLUDE_TESTS:BOOL=ON -DMLIR_INCLUDE_INTEGRATION_TESTS:BOOL=OFF -DMLIR_INSTALL_AGGREGATE_OBJECTS=OFF -DMLIR_BUILD_MLIR_C_DYLIB=ON -DMLIR_ENABLE_BINDINGS_PYTHON:BOOL=ON -DOPENMP_INSTALL_LIBDIR=lib64 -DLIBOMP_INSTALL_ALIASES=OFF -DLLVM_BUILD_TESTS:BOOL=ON -DLLVM_INCLUDE_TESTS:BOOL=ON -DLLVM_INSTALL_GTEST:BOOL=ON -DLLVM_LIT_ARGS=-vv -DLLVM_UNITTEST_LINK_FLAGS=-fno-lto -DBUILD_SHARED_LIBS:BOOL=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_LINKER_BUILD_ID:BOOL=ON -DOFFLOAD_INSTALL_LIBDIR=lib64 -DPython3_EXECUTABLE=/usr/bin/python3 -DCMAKE_SKIP_INSTALL_RPATH:BOOL=ON -DPPC_LINUX_DEFAULT_IEEELONGDOUBLE=ON -DLLVM_LIBDIR_SUFFIX=64 -DLLVM_BINUTILS_INCDIR=/usr/include -DLLVM_VERSION_SUFFIX=
++```
++---
++ mlir/unittests/Target/LLVM/CMakeLists.txt | 5 ++---
++ 1 file changed, 2 insertions(+), 3 deletions(-)
++
++diff --git a/mlir/unittests/Target/LLVM/CMakeLists.txt b/mlir/unittests/Target/LLVM/CMakeLists.txt
++index 6d612548a94c..0c61d222dedf 100644
++--- a/mlir/unittests/Target/LLVM/CMakeLists.txt
+++++ b/mlir/unittests/Target/LLVM/CMakeLists.txt
++@@ -1,11 +1,11 @@
+++set(LLVM_LINK_COMPONENTS nativecodegen)
+++
++ add_mlir_unittest(MLIRTargetLLVMTests
++   SerializeNVVMTarget.cpp
++   SerializeROCDLTarget.cpp
++   SerializeToLLVMBitcode.cpp
++ )
++ 
++-llvm_map_components_to_libnames(llvm_libs nativecodegen)
++-
++ target_link_libraries(MLIRTargetLLVMTests
++   PRIVATE
++   MLIRTargetLLVM
++@@ -19,7 +19,6 @@ target_link_libraries(MLIRTargetLLVMTests
++   MLIRNVVMToLLVMIRTranslation
++   MLIRROCDLToLLVMIRTranslation
++   MLIRGPUToLLVMIRTranslation
++-  ${llvm_libs}
++ )
++ 
++ if (DEFINED LLVM_NATIVE_TARGET)
++-- 
++2.46.0
++
+diff --git a/0001-mlir-python-Reuse-the-library-directory.patch b/0001-mlir-python-Reuse-the-library-directory.patch
+new file mode 100644
+index 0000000..7590347
+--- /dev/null
++++ b/0001-mlir-python-Reuse-the-library-directory.patch
+@@ -0,0 +1,77 @@
++From 1d043550c7601ca776b0318b9b913e5ecf325baf Mon Sep 17 00:00:00 2001
++From: Tulio Magno Quites Machado Filho <tuliom@redhat.com>
++Date: Tue, 5 Sep 2023 10:35:37 -0300
++Subject: [PATCH] Reuse the library directory
++
++Prefer to get the path to the shared libraries from config.llvm_shlib_dir.
++Fallback to the previous path only if config.llvm_shlib_dir is not
++defined.
++
++This ensures the test will pass regardless of the build configuration
++used downstream.
++---
++ mlir/test/lit.cfg.py                 |  1 +
++ mlir/test/python/execution_engine.py | 12 +++++++-----
++ 2 files changed, 8 insertions(+), 5 deletions(-)
++
++diff --git a/mlir/test/lit.cfg.py b/mlir/test/lit.cfg.py
++--- a/mlir/test/lit.cfg.py	2024-08-05 10:40:33.000000000 +0200
+++++ b/mlir/test/lit.cfg.py	2024-08-14 19:17:55.160470316 +0200
++@@ -164,6 +164,7 @@
++         ToolSubst("transform-opt-ch2", unresolved="ignore"),
++         ToolSubst("transform-opt-ch3", unresolved="ignore"),
++         ToolSubst("transform-opt-ch4", unresolved="ignore"),
+++        ToolSubst("%llvm_shlib_dir", config.llvm_shlib_dir, unresolved="ignore"),
++         ToolSubst("mlir-transform-opt", unresolved="ignore"),
++         ToolSubst("%mlir_lib_dir", config.mlir_lib_dir, unresolved="ignore"),
++         ToolSubst("%mlir_src_dir", config.mlir_src_root, unresolved="ignore"),
++diff -ruN mlir-19.1.0-rc2.src.orig/test/python/execution_engine.py mlir-19.1.0-rc2.src/test/python/execution_engine.py
++--- a/mlir/test/python/execution_engine.py	2024-08-05 10:40:33.000000000 +0200
+++++ b/mlir/test/python/execution_engine.py	2024-08-14 19:17:20.822219824 +0200
++@@ -1,4 +1,4 @@
++-# RUN: %PYTHON %s 2>&1 | FileCheck %s
+++# RUN: env LLVM_SHLIB_DIR=%llvm_shlib_dir %PYTHON %s 2>&1 | FileCheck %s
++ # REQUIRES: host-supports-jit
++ import gc, sys, os, tempfile
++ from mlir.ir import *
++@@ -6,6 +6,9 @@
++ from mlir.execution_engine import *
++ from mlir.runtime import *
++ 
+++_DEFAULT_LIB_DIR = "../../../../lib"
+++LIB_DIR = os.getenv("LLVM_SHLIB_DIR", _DEFAULT_LIB_DIR)
+++
++ 
++ # Log everything to stderr and flush so that we have a unified stream to match
++ # errors/info emitted by MLIR to stderr.
++@@ -613,6 +616,7 @@
++             shared_libs = [
++                 "../../../../bin/mlir_runner_utils.dll",
++                 "../../../../bin/mlir_c_runner_utils.dll",
+++
++             ]
++         elif sys.platform == "darwin":
++             shared_libs = [
++@@ -621,8 +625,9 @@
++             ]
++         else:
++             shared_libs = [
++-                "../../../../lib/libmlir_runner_utils.so",
++-                "../../../../lib/libmlir_c_runner_utils.so",
+++                LIB_DIR + "/libmlir_runner_utils.so",
+++                LIB_DIR + "/libmlir_c_runner_utils.so",
+++
++             ]
++ 
++         execution_engine = ExecutionEngine(
++@@ -664,8 +669,8 @@
++             ]
++         else:
++             shared_libs = [
++-                "../../../../lib/libmlir_runner_utils.so",
++-                "../../../../lib/libmlir_c_runner_utils.so",
+++                LIB_DIR + "/libmlir_runner_utils.so",
+++                LIB_DIR + "/libmlir_c_runner_utils.so",
++             ]
++ 
++         execution_engine = ExecutionEngine(
+diff --git a/Makefile b/Makefile
+index 0d91301..83904c9 100644
+--- a/Makefile
++++ b/Makefile
+@@ -89,7 +89,7 @@ edit-last-failing-script: get-last-run-script
+ ######### Re-run the last failing script from mock
+ 
+ .PHONY: mockbuild-rerun-last-script
+-## Re-runs the last failing or running script of your release/mock mockbuild.
++## Re-runs the last failing or running script of your release/snapshot mock mockbuild.
+ mockbuild-rerun-last-script: get-last-run-script
+ 	mock --root=$(MOCK_CHROOT) --shell 'sh -e $(last_run_script)'
+ 
+diff --git a/llvm.spec b/llvm.spec
+index cea5ced..e2ce86f 100644
+--- a/llvm.spec
++++ b/llvm.spec
+@@ -41,6 +41,16 @@
+ %bcond_without lldb
+ %endif
+ 
++%if %{without compat_build} && 0%{?fedora}
++%ifarch %{ix86}
++%bcond_with mlir
++%else
++%bcond_without mlir
++%endif
++%else
++%bcond_with mlir
++%endif
++
+ # Disable LTO on x86 and riscv in order to reduce memory consumption.
+ %ifarch %ix86 riscv64
+ %bcond_with lto_build
+@@ -178,11 +188,15 @@
+ #endregion LLDB globals
+ #endregion globals
+ 
++#region MLIR globals
++%global pkg_name_mlir mlir%{pkg_suffix}
++#endregion MLIR globals
++
+ #region packages
+ #region main package
+ Name:		%{pkg_name_llvm}
+ Version:	%{maj_ver}.%{min_ver}.%{patch_ver}%{?rc_ver:~rc%{rc_ver}}%{?llvm_snapshot_version_suffix:~%{llvm_snapshot_version_suffix}}
+-Release:	1%{?dist}
++Release:	2%{?dist}
+ Summary:	The Low Level Virtual Machine
+ 
+ License:	Apache-2.0 WITH LLVM-exception OR NCSA
+@@ -254,6 +268,15 @@ Patch103: 0001-Workaround-a-bug-in-ORC-on-ppc64le.patch
+ # this might no longer be needed.
+ Patch104: 0001-Driver-Give-devtoolset-path-precedence-over-Installe.patch
+ 
++#region MLIR patches
++# See https://github.com/llvm/llvm-project/pull/108579
++Patch1904: 0001-mlir-python-Reuse-the-library-directory.patch
++# See https://github.com/llvm/llvm-project/pull/108461
++Patch1905: 0001-CMake-Add-missing-dependency-108461.patch
++# See https://github.com/llvm/llvm-project/pull/118542
++Patch1906: 0001-mlir-Specify-deps-via-LLVM_LINK_COMPONENTS.patch
++#endregion MLIR patches
++
+ #region LLD patches
+ Patch1800: 0001-18-Always-build-shared-libs-for-LLD.patch
+ Patch1902: 0001-19-Always-build-shared-libs-for-LLD.patch
+@@ -363,6 +386,12 @@ BuildRequires: perl(Term::ANSIColor)
+ BuildRequires: perl(Text::ParseWords)
+ BuildRequires: perl(Sys::Hostname)
+ 
++%if %{with mlir}
++BuildRequires: python%{python3_pkgversion}-numpy
++BuildRequires: python%{python3_pkgversion}-pybind11
++BuildRequires: python%{python3_pkgversion}-pyyaml
++%endif
++
+ BuildRequires:	graphviz
+ 
+ # This is required because we need "ps" when running LLDB tests
+@@ -761,6 +790,48 @@ Obsoletes: python3-lldb < 18.9
+ The package contains the LLDB Python module.
+ %endif
+ #endregion LLDB packages
++
++#region MLIR packages
++%if %{with mlir}
++%package -n %{pkg_name_mlir}
++Summary:	Multi-Level Intermediate Representation Overview
++License:	Apache-2.0 WITH LLVM-exception
++URL:		http://mlir.llvm.org
++
++%description -n %{pkg_name_mlir}
++The MLIR project is a novel approach to building reusable and extensible
++compiler infrastructure. MLIR aims to address software fragmentation,
++improve compilation for heterogeneous hardware, significantly reduce
++the cost of building domain specific compilers, and aid in connecting
++existing compilers together.
++
++%package -n %{pkg_name_mlir}-static
++Summary:	MLIR static files
++Requires:	%{pkg_name_mlir}%{?_isa} = %{version}-%{release}
++
++%description -n %{pkg_name_mlir}-static
++MLIR static files.
++
++%package -n %{pkg_name_mlir}-devel
++Summary:	MLIR development files
++Requires: %{pkg_name_mlir}%{?_isa} = %{version}-%{release}
++Requires: %{pkg_name_mlir}-static%{?_isa} = %{version}-%{release}
++
++%description -n %{pkg_name_mlir}-devel
++MLIR development files.
++
++%package -n python%{python3_pkgversion}-mlir
++%{?python_provide:%python_provide python%{python3_pkgversion}-mlir}
++Summary:	MLIR python bindings
++
++Requires: python%{python3_pkgversion}
++Requires: python%{python3_pkgversion}-numpy
++
++%description -n python%{python3_pkgversion}-mlir
++MLIR python bindings.
++%endif
++#endregion MLIR packages
++
+ #endregion packages
+ 
+ #region prep
+@@ -857,6 +928,9 @@ The package contains the LLDB Python module.
+ %if %{with lldb}
+ %global projects %{projects};lldb
+ %endif
++%if %{with mlir}
++%global projects %{projects};mlir
++%endif
+ 
+ # Copy CFLAGS into ASMFLAGS, so -fcf-protection is used when compiling assembly files.
+ export ASMFLAGS="%{build_cflags}"
+@@ -990,6 +1064,18 @@ popd
+ 	-DLLVM_UTILS_INSTALL_DIR:PATH=bin
+ #endregion llvm options
+ 
++#region mlir options
++%if %{with mlir}
++%global cmake_config_args %{cmake_config_args} \\\
++        -DMLIR_INCLUDE_DOCS:BOOL=ON \\\
++        -DMLIR_INCLUDE_TESTS:BOOL=ON \\\
++        -DMLIR_INCLUDE_INTEGRATION_TESTS:BOOL=OFF \\\
++        -DMLIR_INSTALL_AGGREGATE_OBJECTS=OFF \\\
++        -DMLIR_BUILD_MLIR_C_DYLIB=ON \\\
++        -DMLIR_ENABLE_BINDINGS_PYTHON:BOOL=ON
++%endif
++#endregion mlir options
++
+ #region openmp options
+ %global cmake_config_args %{cmake_config_args} \\\
+ 	-DOPENMP_INSTALL_LIBDIR=%{unprefixed_libdir} \\\
+@@ -1403,6 +1489,17 @@ ln -vsf "../../../${liblldb}" %{buildroot}%{python3_sitearch}/lldb/_lldb.so
+ %endif
+ #endregion LLDB installation
+ 
++#region mlir installation
++%if %{with mlir}
++mkdir -p %{buildroot}/%{python3_sitearch}
++mv %{buildroot}%{_prefix}/python_packages/mlir_core/mlir %{buildroot}/%{python3_sitearch}
++# These directories should be empty now.
++rmdir %{buildroot}%{_prefix}/python_packages/mlir_core %{buildroot}%{_prefix}/python_packages
++# Unneeded files.
++rm -rf %{buildroot}%{_prefix}/src/python
++%endif
++#endregion mlir installation
++
+ %if %{with compat_build}
+ # Add version suffix to binaries. Do this at the end so it includes any
+ # additional binaries that may be been added by other steps.
+@@ -1494,6 +1591,9 @@ function reset_test_opts()
+     # Set for filtering out unit tests.
+     # See http://google.github.io/googletest/advanced.html#running-a-subset-of-the-tests
+     unset GTEST_FILTER
++
++    # Some test (e.g. mlir) require this to be set.
++    unset PYTHONPATH
+ }
+ 
+ # Convert array of test names into a regex.
+@@ -1520,6 +1620,21 @@ function test_list_to_regex()
+     # Add enclosing parenthesis
+     echo "($arr)"
+ }
++
++# Similar to test_list_to_regex() except that this function exports
++# the LIT_FILTER_OUT if there are tests in the given list.
++# If there are no tests, the LIT_FILTER_OUT is unset in order to
++# avoid issues with the llvm test system.
++function adjust_lit_filter_out()
++{
++  local -n arr=$1
++  local res=$(test_list_to_regex test_list_filter_out)
++  if [[ "$res" != "()" ]]; then
++    export LIT_FILTER_OUT=$res
++  else
++    unset LIT_FILTER_OUT
++  fi
++}
+ #endregion Helper functions
+ 
+ #region Test LLVM lit
+@@ -1606,7 +1721,7 @@ test_list_filter_out+=("libomp :: flush/omp_flush.c")
+ %endif
+ 
+ %ifarch aarch64 s390x
+-# The following test has been failling intermittently on aarch64 and s390x.
++# The following test has been failing intermittently on aarch64 and s390x.
+ # Re-enable it after https://github.com/llvm/llvm-project/issues/117773
+ # gets fixed.
+ test_list_filter_out+=("libarcher :: races/taskwait-depend.c")
+@@ -1711,7 +1826,7 @@ export LIT_XFAIL="$LIT_XFAIL;offloading/thread_state_1.c"
+ export LIT_XFAIL="$LIT_XFAIL;offloading/thread_state_2.c"
+ %endif
+ 
+-export LIT_FILTER_OUT=$(test_list_to_regex test_list_filter_out)
++adjust_lit_filter_out test_list_filter_out
+ 
+ %cmake_build --target check-openmp
+ #endregion Test OPENMP
+@@ -1743,6 +1858,29 @@ reset_test_opts
+ %cmake_build --target check-lld
+ #endregion Test LLD
+ 
++#region Test MLIR
++%if %{with mlir}
++reset_test_opts
++%ifarch s390x
++# s390x does not support half-float
++test_list_filter_out+=("mlir/test/python/execution_engine.py")
++
++# https://discourse.llvm.org/t/mlir-s390x-linux-failure/76695/25
++test_list_filter_out+=("mlir/test/Target/LLVMIR/llvmir.mlir")
++test_list_filter_out+=("mlir/test/python/ir/array_attributes.py")
++%endif
++
++%ifarch ppc64le
++test_list_filter_out+=("test/python/execution_engine.py")
++%endif
++
++adjust_lit_filter_out test_list_filter_out
++
++export PYTHONPATH=%{buildroot}/%{python3_sitearch}
++%cmake_build --target check-mlir
++%endif
++#endregion Test MLIR
++
+ %endif
+ 
+ %if %{with snapshot_build}
+@@ -2501,10 +2639,62 @@ fi
+ %{python3_sitearch}/lldb
+ %endif
+ #endregion LLDB files
++
++
++#region MLIR files
++%if %{with mlir}
++%files -n %{pkg_name_mlir}
++%license LICENSE.TXT
++%{_libdir}/libmlir_arm_runner_utils.so.%{maj_ver}*
++%{_libdir}/libmlir_arm_sme_abi_stubs.so.%{maj_ver}*
++%{_libdir}/libmlir_async_runtime.so.%{maj_ver}*
++%{_libdir}/libmlir_c_runner_utils.so.%{maj_ver}*
++%{_libdir}/libmlir_float16_utils.so.%{maj_ver}*
++%{_libdir}/libmlir_runner_utils.so.%{maj_ver}*
++%{_libdir}/libMLIR*.so.%{maj_ver}*
++
++%files -n %{pkg_name_mlir}-static
++%{_libdir}/libMLIR*.a
++
++%files -n %{pkg_name_mlir}-devel
++%{_bindir}/mlir-cat
++%{_bindir}/mlir-cpu-runner
++%{_bindir}/mlir-linalg-ods-yaml-gen
++%{_bindir}/mlir-lsp-server
++%{_bindir}/mlir-minimal-opt
++%{_bindir}/mlir-minimal-opt-canonicalize
++%{_bindir}/mlir-opt
++%{_bindir}/mlir-pdll
++%{_bindir}/mlir-pdll-lsp-server
++%{_bindir}/mlir-query
++%{_bindir}/mlir-reduce
++%{_bindir}/mlir-tblgen
++%{_bindir}/mlir-transform-opt
++%{_bindir}/mlir-translate
++%{_bindir}/tblgen-lsp-server
++%{_bindir}/tblgen-to-irdl
++%{_includedir}/mlir
++%{_includedir}/mlir-c
++%{_libdir}/cmake/mlir
++%{_libdir}/libmlir_arm_runner_utils.so
++%{_libdir}/libmlir_arm_sme_abi_stubs.so
++%{_libdir}/libmlir_async_runtime.so
++%{_libdir}/libmlir_c_runner_utils.so
++%{_libdir}/libmlir_float16_utils.so
++%{_libdir}/libmlir_runner_utils.so
++%{_libdir}/libMLIR*.so
++
++%files -n python%{python3_pkgversion}-%{pkg_name_mlir}
++%{python3_sitearch}/mlir/
++%endif
++#endregion MLIR files
+ #endregion files
+ 
+ #region changelog
+ %changelog
++* Wed Dec 04 2024 Konrad Kleine <kkleine@redhat.com> - 19.1.5-2
++- Add mlir
++
+ * Tue Dec 03 2024 Timm Bäder <tbaeder@redhat.com> - 19.1.5-1
+ - Update to 19.1.5
+ 
+
